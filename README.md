@@ -60,7 +60,7 @@ For this project only, `.env` is intentionally committed so everyone can run the
 
 This was done specifically for hackathon/demo convenience and is not a recommended pattern for production projects.
 
-If you want to use your own keys, update `.env` with your values.
+The committed `.env` uses starter values; replace them with your own keys for full Companion and backend functionality.
 
 ### Running the App
 ```bash
