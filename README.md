@@ -53,17 +53,14 @@ cd MAQAM
 
 # Install dependencies (legacy peer deps required for groq-sdk)
 npm install --legacy-peer-deps
-
-# Create Environment Files
-# You need an active Groq API Key and Quran Foundation credentials.
-touch .env
 ```
 
-Add the following to your `.env` file:
-```env
-EXPO_PUBLIC_GROQ_API_KEY=your_groq_api_key_here
-```
-*(Optionally setup Supabase anonymous keys inside `supabase.ts` for full Halaka support)*
+### Environment Note (Intentional for this Project)
+For this project only, `.env` is intentionally committed so everyone can run the app quickly without extra setup.
+
+This was done specifically for hackathon/demo convenience and is not a recommended pattern for production projects.
+
+If you want to use your own keys, update `.env` with your values.
 
 ### Running the App
 ```bash
