@@ -16,29 +16,102 @@ export default function LoginScreen() {
   
   const styles = React.useMemo(() => getStyles(colors), [colors]);
 
-  const handleSubmit = async () => {
-    if (!email || !password) return Alert.alert('Error', 'Please fill all fields');
-    setLoading(true);
+  const normalizeTestEmail = (value: string) => {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed.includes('@')) return trimmed;
 
-    if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setLoading(false);
-      if (error) Alert.alert('Sign In Error', error.message);
-      else router.replace('/(tabs)');
-    } else {
-      const { data: { user }, error } = await supabase.auth.signUp({ email, password });
-      setLoading(false);
-      if (error) {
-        Alert.alert('Sign Up Error', error.message);
-      } else if (user) {
-        // Create user profile record required by DB schema
-        await supabase.from('users').insert({
-          id: user.id,
-          email: user.email,
-          name: email.split('@')[0],
+    const safeLocalPart = trimmed.replace(/[^a-z0-9._-]/g, '');
+    return `${safeLocalPart || 'tester'}@test.maqam.local`;
+  };
+
+  const normalizeTestPassword = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed.length >= 6) return trimmed;
+    return `${trimmed}maqam_test`;
+  };
+
+  const syncUserProfile = async (userId: string, userEmail: string) => {
+    await supabase.from('users').upsert(
+      {
+        id: userId,
+        email: userEmail,
+        name: userEmail.split('@')[0],
+      },
+      { onConflict: 'id' }
+    );
+  };
+
+  const handleSubmit = async () => {
+    const rawEmail = email.trim();
+    const rawPassword = password.trim();
+
+    if (!rawEmail || !rawPassword) return Alert.alert('Error', 'Please fill all fields');
+
+    if (process.env.EXPO_PUBLIC_SUPABASE_URL?.includes('replace-with-your-project')) {
+      return Alert.alert('Setup Required', 'Please add your real Supabase URL and Anon Key to the .env file then rebuild the app.');
+    }
+
+    const authEmail = normalizeTestEmail(rawEmail);
+    const authPassword = normalizeTestPassword(rawPassword);
+
+    setLoading(true);
+    try {
+      if (isLogin) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword,
         });
+
+        if (!signInError && signInData.user) {
+          await syncUserProfile(signInData.user.id, signInData.user.email ?? authEmail);
+          router.replace('/(tabs)');
+          return;
+        }
+
+        // For testing, auto-create the account on first login attempt.
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+        });
+
+        if (signUpError || !signUpData.user) {
+          Alert.alert('Sign In Error', signInError?.message || signUpError?.message || 'Unable to sign in');
+          return;
+        }
+
+        await syncUserProfile(signUpData.user.id, signUpData.user.email ?? authEmail);
+
+        if (!signUpData.session) {
+          const { error: retrySignInError } = await supabase.auth.signInWithPassword({
+            email: authEmail,
+            password: authPassword,
+          });
+
+          if (retrySignInError) {
+            Alert.alert('Sign In Error', retrySignInError.message);
+            return;
+          }
+        }
+
+        router.replace('/onboarding');
+      } else {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+        });
+
+        if (signUpError || !signUpData.user) {
+          Alert.alert('Sign Up Error', signUpError?.message || 'Unable to create account');
+          return;
+        }
+
+        await syncUserProfile(signUpData.user.id, signUpData.user.email ?? authEmail);
         router.replace('/onboarding');
       }
+    } catch (error: any) {
+      Alert.alert(isLogin ? 'Sign In Error' : 'Sign Up Error', error?.message || 'Unexpected error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -66,6 +139,9 @@ export default function LoginScreen() {
           onChangeText={setPassword}
           secureTextEntry
         />
+        <Text style={styles.testingHint} numberOfLines={1}>
+          (for testing, any email and password works; no real email needed)
+        </Text>
 
         <TouchableOpacity 
           style={styles.button} 
@@ -132,6 +208,12 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 16,
     color: colors.foreground,
     fontSize: 16,
+  },
+  testingHint: {
+    marginTop: -4,
+    color: colors.mutedForeground,
+    textAlign: 'center',
+    fontSize: 12,
   },
   button: {
     height: 54,
